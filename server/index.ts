@@ -27,6 +27,8 @@ app.get('/', (req, res) => {
     res.send("I'm working");
 });
 
-app.listen(port, ()=> {
+const server = app.listen(port, ()=> {
     console.log(`Server started at port: ${port}`);
 })
+
+export = server;

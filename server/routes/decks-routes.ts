@@ -12,7 +12,8 @@ router.get('/:username/deck/all/', async (req: Request, res: Response) => {
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        // res.send('No document found;');
+        res.status(404);
     }
 
     res.send(doc.decks);
@@ -21,13 +22,13 @@ router.get('/:username/deck/all/', async (req: Request, res: Response) => {
 // create deck in user object
 router.post('/:username/deck/create', async (req: Request, res: Response) => {
     const doc: any = await userModel.findOne({username: req.params.username});
-
+    
     if (!doc) {
-        res.send('No document found;');
+        res.status(404)
     }
 
     if (!req.body.name) {
-        res.send('There was no deck name');
+        res.status(400);
     }
 
     const deck: Deck = {
@@ -35,8 +36,14 @@ router.post('/:username/deck/create', async (req: Request, res: Response) => {
         cards: []
     }
 
-    doc.decks.push(deck);
-    doc.save();
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.decks.push(deck);
+            doc.save();
+        } catch (error) {
+            res.send(error);
+        }
+    }
     res.send(doc);
 })
 
@@ -45,22 +52,26 @@ router.post('/:username/deck/:deckid/delete', async (req: Request, res: Response
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        res.status(404).end();
+        return;
     }
 
-    let index: number = 0;
-    doc.decks.forEach((deck: Deck) => {
-        index++;
-        if(deck._id == req.params.deckid) {
-            console.log(index);
-            console.log(deck);
-            doc.decks.splice(index - 1);
-        } else {
-            res.send('There was no deck with that id');
-        }
-    })
+    const foundIndex: number = doc.decks.findIndex((deck: Deck) => deck._id == req.params.deckid)    
+    if (foundIndex !== -1) {
+        doc.decks.splice(foundIndex);   
+    }else {
+        res.status(404).send('No deck with that id')
+        return;
+    }
+    
 
-    doc.save()
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.save();
+        } catch (error) {
+            res.send(error);
+        }
+    }    
     res.send(doc.decks)
 })
 
@@ -69,16 +80,25 @@ router.post('/:username/deck/:deckid/update', async(req: Request, res: Response)
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        res.status(404).send('No user found with that id    ');
+        return;
     }
 
-    doc.decks.forEach((deck: Deck) => {
-        if(deck._id == req.params.deckid) {
-            deck.name = req.body.name
-        }
-    })
+    const foundIndex: number = doc.decks.findIndex((deck: Deck) => deck._id == req.params.deckid)    
+    if (foundIndex !== -1) {
+        doc.decks[foundIndex].name = req.body.name;   
+    }else {
+        res.status(404).send('No deck with that id')
+        return;
+    }
 
-    doc.save()
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.save();
+        } catch (error) {
+            res.send(error);
+        }
+    }   
     res.send(doc.decks)
 })
 
@@ -87,11 +107,13 @@ router.post('/:username/deck/:deckid/card/create', async (req: Request, res: Res
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        res.status(404).send('No user with that id found');
+        return;
     }
 
     if (!req.body.explanation || !req.body.question) {
-        res.send('please fill in all info');
+        res.status(400).send('Please fill in all info');
+        return;
     }
 
     // Card object
@@ -101,13 +123,21 @@ router.post('/:username/deck/:deckid/card/create', async (req: Request, res: Res
     }
 
 
-    doc.decks.forEach((deck: Deck) => {
-        if(deck._id == req.params.deckid) {
-            deck.cards.push(card);
-        }
-    })
+    const foundIndex: number = doc.decks.findIndex((deck: Deck) => deck._id == req.params.deckid)    
+    if (foundIndex !== -1) {
+        doc.decks[foundIndex].cards.push(card);   
+    }else {
+        res.status(404).send('No deck with that id')
+        return;
+    }
 
-    doc.save();
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.save();
+        } catch (error) {
+            res.send(error);
+        }
+    } 
     res.send(doc.decks)
 
 })
@@ -117,27 +147,32 @@ router.post('/:username/deck/:deckid/card/delete/:cardid', async (req: Request, 
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        res.status(404).send('No user found');
+        return;
     }
-    let index: number = 0;
-    let deckIndex: number = -1;
-    doc.decks.forEach((deck: Deck) => {
-        deckIndex++;
-        if(deck._id == req.params.deckid) {
-            deck.cards.forEach((card: Card) => {
-                index++
-                if (card._id == req.params.cardid) {
-                    doc.decks[deckIndex].cards.splice(index - 1)
-                }
-            })
-        } else {
-            res.send('No deck found')
-            next();
-        }
-    })
 
-    doc.save();
-    res.send(doc.decks);
+    const deckIndex: number = doc.decks.findIndex((deck: Deck) => deck._id == req.params.deckid)    
+    if (deckIndex == -1) {
+        res.status(404).send('Deck with that id not found');
+        return;
+    }
+
+    const cardIndex: number = doc.decks[deckIndex].cards.findIndex((card: Card) => card._id == req.params.cardid)    
+    if (cardIndex == -1) {
+        res.status(404).send('Card with that id not found');
+        return;
+    }
+
+    doc.decks[deckIndex].cards.splice(cardIndex);
+
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.save();
+        } catch (error) {
+            res.send(error);
+        }
+    }     
+res.send(doc.decks);
 })
 
 // Edit card in deck in user
@@ -145,23 +180,38 @@ router.post('/:username/deck/:deckid/card/edit/:cardid', async (req: Request, re
     const doc: any = await userModel.findOne({username: req.params.username});
 
     if (!doc) {
-        res.send('No document found;');
+        res.status(404).send('Could not find the user');
+        return;
     }
 
-    doc.decks.forEach((deck: Deck, deckIndex: number) => {
-        if (deck._id == req.params.deckid) {
-            deck.cards.forEach((card: Card, cardIndex: number) => {
-                if (card._id == req.params.cardid) {
-                    doc.decks[deckIndex].cards[cardIndex].question = req.body.question;
-                    doc.decks[deckIndex].cards[cardIndex].explanation = req.body.explanation;
-                    doc.save();
-                    res.send(doc.decks)
-                }
-            })
-        } else {
-            res.send('No index found');
+    const deckIndex: number = doc.decks.findIndex((deck: Deck) => deck._id == req.params.deckid)    
+    if (deckIndex == -1) {
+        res.status(404).send('Deck with that id not found');
+        return;
+    }
+
+    const cardIndex: number = doc.decks[deckIndex].cards.findIndex((card: Card) => card._id == req.params.cardid)    
+    if (cardIndex == -1) {
+        res.status(404).send('Card with that id not found');
+        return;
+    }
+
+    if (!req.body.explanation || !req.body.question) {
+        res.status(400).send('Please fill in all info');
+        return;
+    }
+
+    doc.decks[deckIndex].cards[cardIndex].question = req.body.question;
+    doc.decks[deckIndex].cards[cardIndex].explanation = req.body.explanation;
+
+    if(process.env.NODE_ENV != 'test'){
+        try {
+            doc.save();
+        } catch (error) {
+            res.send(error);
         }
-    })
+    }     
+res.send(doc.decks);
 })
 
 
